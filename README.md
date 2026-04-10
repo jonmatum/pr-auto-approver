@@ -24,7 +24,7 @@ If Bedrock is disabled or fails, the bot falls back to auto-approve after CI pas
 
 ```bash
 npm ci
-zip -r lambda.zip index.js lambda.js review.js node_modules package.json
+zip -r lambda.zip index.js lambda.js review.js secrets.js node_modules package.json
 ```
 
 The `lambda.zip` is what you pass to the [terraform-aws-pr-auto-approver](https://github.com/jonmatum/terraform-aws-pr-auto-approver) module.
