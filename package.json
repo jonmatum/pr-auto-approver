@@ -12,7 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1029.0",
-    "@aws-sdk/client-secrets-manager": "^3.1029.0",
     "@probot/adapter-aws-lambda-serverless": "^4.0.3",
     "probot": "^14.3.2"
   }
