@@ -1,3 +1,5 @@
+const { reviewWithBedrock } = require("./review");
+
 module.exports = (app) => {
   app.on(["pull_request.opened", "check_suite.completed"], async (context) => {
     const pr =
@@ -18,9 +20,7 @@ module.exports = (app) => {
       ref: pr.head.sha,
     });
 
-    const pending = checks.data.check_runs.filter(
-      (c) => c.status !== "completed"
-    );
+    const pending = checks.data.check_runs.filter((c) => c.status !== "completed");
     const failed = checks.data.check_runs.filter(
       (c) => c.status === "completed" && c.conclusion !== "success" && c.conclusion !== "skipped"
     );
@@ -31,7 +31,7 @@ module.exports = (app) => {
     }
 
     if (failed.length) {
-      app.log.info(`PR #${pr.number} has ${failed.length} failed checks, skipping approval`);
+      app.log.info(`PR #${pr.number} has ${failed.length} failed checks, skipping`);
       return;
     }
 
@@ -39,16 +39,52 @@ module.exports = (app) => {
       ...context.repo(),
       pull_number: pr.number,
     });
-    const alreadyApproved = reviews.data.some(
-      (r) => r.state === "APPROVED" && r.user.type === "Bot"
+    const alreadyReviewed = reviews.data.some(
+      (r) => (r.state === "APPROVED" || r.state === "CHANGES_REQUESTED") && r.user.type === "Bot"
     );
-    if (alreadyApproved) return;
+    if (alreadyReviewed) return;
+
+    // Bedrock AI review (opt-in)
+    if (process.env.BEDROCK_ENABLED === "true") {
+      app.log.info(`Running Bedrock review on PR #${pr.number}`);
+
+      const { data: diff } = await context.octokit.pulls.get({
+        ...context.repo(),
+        pull_number: pr.number,
+        mediaType: { format: "diff" },
+      });
+
+      try {
+        const issues = await reviewWithBedrock(diff, pr.title, pr.body);
+
+        if (issues.length > 0) {
+          await context.octokit.pulls.createReview({
+            ...context.repo(),
+            pull_number: pr.number,
+            commit_id: pr.head.sha,
+            event: "REQUEST_CHANGES",
+            body: `AI review found ${issues.length} issue(s).`,
+            comments: issues.map((i) => ({
+              path: i.path,
+              line: i.line,
+              body: `\uD83E\uDD16 ${i.body}`,
+            })),
+          });
+          app.log.info(`Requested changes on PR #${pr.number} (${issues.length} issues)`);
+          return;
+        }
+      } catch (err) {
+        app.log.error(`Bedrock review failed for PR #${pr.number}: ${err.message}`);
+      }
+    }
 
     await context.octokit.pulls.createReview({
       ...context.repo(),
       pull_number: pr.number,
       event: "APPROVE",
-      body: "All checks passed. Auto-approved by pr-auto-approver bot.",
+      body: process.env.BEDROCK_ENABLED === "true"
+        ? "All checks passed. AI review found no issues. Auto-approved."
+        : "All checks passed. Auto-approved by pr-auto-approver bot.",
     });
 
     app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
