@@ -1,0 +1,17 @@
+{
+  "name": "pr-auto-approver",
+  "version": "1.0.0",
+  "description": "GitHub App that auto-approves pull requests after CI checks pass",
+  "main": "index.js",
+  "scripts": {
+    "start": "probot run ./index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@probot/adapter-aws-lambda-serverless": "^4.0.3",
+    "probot": "^14.3.2"
+  }
+}
