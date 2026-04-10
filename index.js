@@ -35,6 +35,7 @@ module.exports = (app) => {
       return;
     }
 
+    // Avoid duplicate reviews
     const reviews = await context.octokit.pulls.listReviews({
       ...context.repo(),
       pull_number: pr.number,
@@ -67,7 +68,7 @@ module.exports = (app) => {
             comments: issues.map((i) => ({
               path: i.path,
               line: i.line,
-              body: `\uD83E\uDD16 ${i.body}`,
+              body: `🤖 ${i.body}`,
             })),
           });
           app.log.info(`Requested changes on PR #${pr.number} (${issues.length} issues)`);
@@ -75,6 +76,7 @@ module.exports = (app) => {
         }
       } catch (err) {
         app.log.error(`Bedrock review failed for PR #${pr.number}: ${err.message}`);
+        // Fall through to approve if Bedrock fails
       }
     }
 

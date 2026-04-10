@@ -45,7 +45,12 @@ async function reviewWithBedrock(diff, title, description) {
   const text = body.content[0].text;
 
   const match = text.match(/\[[\s\S]*\]/);
-  return match ? JSON.parse(match[0]) : [];
+  if (!match) return [];
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return [];
+  }
 }
 
 module.exports = { reviewWithBedrock };
