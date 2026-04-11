@@ -1,4 +1,14 @@
 const { reviewWithBedrock } = require("./review");
+const { Octokit } = require("@octokit/rest");
+
+function getApprovalClient(context) {
+  // Use PAT for approvals if available (counts toward branch protection)
+  // Falls back to App installation token
+  if (process.env.APPROVAL_TOKEN) {
+    return new Octokit({ auth: process.env.APPROVAL_TOKEN });
+  }
+  return context.octokit;
+}
 
 module.exports = (app) => {
   app.on(["pull_request.opened", "pull_request.synchronize", "check_suite.completed"], async (context) => {
@@ -47,12 +57,15 @@ module.exports = (app) => {
       if (alreadyReviewed) return;
     }
 
+    const approvalClient = getApprovalClient(context);
+    const repo = context.repo();
+
     // Bedrock AI review (opt-in)
     if (process.env.BEDROCK_ENABLED === "true") {
       app.log.info(`Running Bedrock review on PR #${pr.number}`);
 
       const { data: diff } = await context.octokit.pulls.get({
-        ...context.repo(),
+        ...repo,
         pull_number: pr.number,
         mediaType: { format: "diff" },
       });
@@ -61,8 +74,8 @@ module.exports = (app) => {
         const issues = await reviewWithBedrock(diff, pr.title, pr.body);
 
         if (issues.length > 0) {
-          await context.octokit.pulls.createReview({
-            ...context.repo(),
+          await approvalClient.pulls.createReview({
+            ...repo,
             pull_number: pr.number,
             commit_id: pr.head.sha,
             event: "REQUEST_CHANGES",
@@ -78,12 +91,11 @@ module.exports = (app) => {
         }
       } catch (err) {
         app.log.error(`Bedrock review failed for PR #${pr.number}: ${err.message}`);
-        // Fall through to approve if Bedrock fails
       }
     }
 
-    await context.octokit.pulls.createReview({
-      ...context.repo(),
+    await approvalClient.pulls.createReview({
+      ...repo,
       pull_number: pr.number,
       event: "APPROVE",
       body: process.env.BEDROCK_ENABLED === "true"
@@ -91,21 +103,7 @@ module.exports = (app) => {
         : "All checks passed. Auto-approved by pr-auto-approver bot.",
     });
 
-    // Auto-merge if enabled
-    if (process.env.AUTO_MERGE === "true") {
-      try {
-        await context.octokit.pulls.merge({
-          ...context.repo(),
-          pull_number: pr.number,
-          merge_method: "squash",
-        });
-        app.log.info(`Merged PR #${pr.number} by ${pr.user.login}`);
-      } catch (err) {
-        app.log.info(`Could not auto-merge PR #${pr.number}: ${err.message}`);
-      }
-    } else {
-      app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
-    }
+    app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
   });
 };
 

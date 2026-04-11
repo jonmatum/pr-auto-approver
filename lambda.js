@@ -12,6 +12,11 @@ module.exports.handler = async (event, context) => {
     ]);
     process.env.PRIVATE_KEY = privateKey;
     process.env.WEBHOOK_SECRET = webhookSecret;
+
+    if (process.env.APPROVAL_TOKEN_SECRET_ARN) {
+      process.env.APPROVAL_TOKEN = await getSecret(process.env.APPROVAL_TOKEN_SECRET_ARN);
+    }
+
     handler = createLambdaFunction(appFn, { probot: createProbot() });
   }
   return handler(event, context);
