@@ -1,7 +1,7 @@
 const { reviewWithBedrock } = require("./review");
 
 module.exports = (app) => {
-  app.on(["pull_request.opened", "check_suite.completed"], async (context) => {
+  app.on(["pull_request.opened", "pull_request.synchronize", "check_suite.completed"], async (context) => {
     const pr =
       context.payload.pull_request ||
       (await getPRFromCheckSuite(context));
