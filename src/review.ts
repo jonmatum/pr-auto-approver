@@ -3,13 +3,14 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 export interface ReviewIssue {
   path: string;
   line: number;
+  severity: "critical" | "warning";
   body: string;
 }
 
 const REVIEW_PROMPT = `You are a senior code reviewer. Review the pull request diff below.
 
 Only flag issues that are CLEARLY wrong in the code as written. Do NOT flag:
-- Values read from environment variables (process.env.X is correct, not hardcoded)
+- Values read from environment variables (process.env.X, os.environ.get() are correct, not hardcoded)
 - Architectural suggestions or design preferences
 - Missing features that aren't in scope of the PR
 - Style or formatting issues
@@ -22,17 +23,29 @@ DO flag:
 - Null/undefined access without checks that WILL crash
 - Weak crypto (bcrypt rounds < 10)
 
-Respond with a JSON array of issues:
-[{"path": "file/path.js", "line": 10, "body": "Description"}]
+Language-specific notes (DO NOT flag these as issues):
+- Python: db.execute("SELECT ... WHERE id = %s", (value,)) with tuple is SAFE parameterized query
+- Go: db.Query("SELECT ... WHERE id = ?", value) with ? placeholder is SAFE
+- Java: PreparedStatement with ? placeholder is SAFE
+- Node.js: Parameterized queries with $1 or ? placeholders are SAFE
+
+Severity levels:
+- "critical": Security vulnerabilities, hardcoded secrets, injection, data exposure (MUST be fixed)
+- "warning": Missing null checks, weak crypto, minor issues (should be fixed but not blocking)
+
+Respond with a JSON array:
+[{"path": "file.js", "line": 10, "severity": "critical", "body": "Description"}]
 
 "line" = line number in the new file. "path" = file path from diff header.
 If the code is acceptable, respond with: []
 
-PR Title: {title}
+{context}PR Title: {title}
 PR Description: {description}
 
 Diff:
 {diff}`;
+
+const DIFF_SIZE_THRESHOLD = 50000;
 
 export async function reviewWithBedrock(
   diff: string,
@@ -40,9 +53,18 @@ export async function reviewWithBedrock(
   description: string | null
 ): Promise<ReviewIssue[]> {
   const client = new BedrockRuntimeClient({});
-  const modelId = process.env.BEDROCK_MODEL_ID || "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+
+  const defaultModel = "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+  const largeModel = process.env.BEDROCK_MODEL_ID_LARGE || defaultModel;
+  const smallModel = process.env.BEDROCK_MODEL_ID || defaultModel;
+  const modelId = diff.length > DIFF_SIZE_THRESHOLD ? largeModel : smallModel;
+
+  const context = process.env.REVIEW_CONTEXT
+    ? `Project context: ${process.env.REVIEW_CONTEXT}\n\n`
+    : "";
 
   const prompt = REVIEW_PROMPT
+    .replace("{context}", context)
     .replace("{title}", title || "")
     .replace("{description}", description || "")
     .replace("{diff}", diff.substring(0, 100000));

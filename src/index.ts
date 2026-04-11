@@ -15,16 +15,15 @@ async function submitReview(
   comments?: ReviewIssue[]
 ): Promise<void> {
   const repo = context.repo();
+  const formattedComments = comments?.map((i) => ({
+    path: i.path,
+    line: i.line,
+    body: `🤖 [${(i.severity || "critical").toUpperCase()}] ${i.body}`,
+  }));
 
   if (process.env.APPROVAL_TOKEN) {
     const payload: ReviewParams = { event, body };
-    if (comments) {
-      payload.comments = comments.map((i) => ({
-        path: i.path,
-        line: i.line,
-        body: `🤖 ${i.body}`,
-      }));
-    }
+    if (formattedComments) payload.comments = formattedComments;
     const data = JSON.stringify(payload);
     const options: https.RequestOptions = {
       hostname: "api.github.com",
@@ -58,9 +57,7 @@ async function submitReview(
       commit_id: pr.head.sha,
       event,
       body,
-      ...(comments
-        ? { comments: comments.map((i) => ({ path: i.path, line: i.line, body: `🤖 ${i.body}` })) }
-        : {}),
+      ...(formattedComments ? { comments: formattedComments } : {}),
     });
   }
 }
@@ -82,7 +79,6 @@ module.exports = (app: any) => {
       const pr = context.payload.pull_request || (await getPRFromCheckSuite(context));
       if (!pr) return;
 
-      // Dismiss previous bot reviews on new pushes
       if (context.payload.action === "synchronize") {
         await dismissPreviousReviews(context, pr);
       }
@@ -137,9 +133,29 @@ module.exports = (app: any) => {
 
         try {
           const issues = await reviewWithBedrock(diff, pr.title, pr.body);
+
           if (issues.length > 0) {
-            await submitReview(context, pr, "REQUEST_CHANGES", `AI review found ${issues.length} issue(s).`, issues);
-            app.log.info(`Requested changes on PR #${pr.number} (${issues.length} issues)`);
+            const critical = issues.filter((i) => i.severity === "critical");
+            const warnings = issues.filter((i) => i.severity === "warning");
+
+            if (critical.length > 0) {
+              // Critical issues block the PR
+              await submitReview(
+                context, pr, "REQUEST_CHANGES",
+                `AI review found ${critical.length} critical and ${warnings.length} warning issue(s).`,
+                issues
+              );
+              app.log.info(`Requested changes on PR #${pr.number} (${critical.length} critical, ${warnings.length} warnings)`);
+              return;
+            }
+
+            // Only warnings — approve but include comments
+            await submitReview(
+              context, pr, "APPROVE",
+              `AI review found ${warnings.length} warning(s) but no critical issues. Auto-approved.`,
+              warnings
+            );
+            app.log.info(`Approved PR #${pr.number} with ${warnings.length} warnings`);
             return;
           }
         } catch (err: any) {
@@ -148,9 +164,7 @@ module.exports = (app: any) => {
       }
 
       await submitReview(
-        context,
-        pr,
-        "APPROVE",
+        context, pr, "APPROVE",
         process.env.BEDROCK_ENABLED === "true"
           ? "All checks passed. AI review found no issues. Auto-approved."
           : "All checks passed. Auto-approved by pr-auto-approver bot."
@@ -176,7 +190,6 @@ async function dismissPreviousReviews(context: any, pr: any): Promise<void> {
           message: "Dismissed: new commits pushed, re-reviewing.",
         });
       } catch {
-        // May fail if review was submitted via PAT — dismiss via PAT too
         if (process.env.APPROVAL_TOKEN) {
           const https = await import("https");
           const repo = context.repo();
