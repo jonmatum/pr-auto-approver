@@ -1,13 +1,44 @@
 const { reviewWithBedrock } = require("./review");
-const { Octokit } = require("@octokit/rest");
 
-function getApprovalClient(context) {
-  // Use PAT for approvals if available (counts toward branch protection)
-  // Falls back to App installation token
+async function submitReview(context, pr, event, body, comments) {
+  const repo = context.repo();
+  const params = {
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: pr.number,
+    commit_id: pr.head.sha,
+    event,
+    body,
+  };
+  if (comments) params.comments = comments;
+
   if (process.env.APPROVAL_TOKEN) {
-    return new Octokit({ auth: process.env.APPROVAL_TOKEN });
+    const https = require("https");
+    const data = JSON.stringify(params);
+    const options = {
+      hostname: "api.github.com",
+      path: `/repos/${repo.owner}/${repo.repo}/pulls/${pr.number}/reviews`,
+      method: "POST",
+      headers: {
+        Authorization: `token ${process.env.APPROVAL_TOKEN}`,
+        "Content-Type": "application/json",
+        "User-Agent": "pr-auto-approver",
+        Accept: "application/vnd.github+json",
+      },
+    };
+    await new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let body = "";
+        res.on("data", (d) => (body += d));
+        res.on("end", () => resolve(body));
+      });
+      req.on("error", reject);
+      req.write(data);
+      req.end();
+    });
+  } else {
+    await context.octokit.pulls.createReview(params);
   }
-  return context.octokit;
 }
 
 module.exports = (app) => {
@@ -57,15 +88,12 @@ module.exports = (app) => {
       if (alreadyReviewed) return;
     }
 
-    const approvalClient = getApprovalClient(context);
-    const repo = context.repo();
-
     // Bedrock AI review (opt-in)
     if (process.env.BEDROCK_ENABLED === "true") {
       app.log.info(`Running Bedrock review on PR #${pr.number}`);
 
       const { data: diff } = await context.octokit.pulls.get({
-        ...repo,
+        ...context.repo(),
         pull_number: pr.number,
         mediaType: { format: "diff" },
       });
@@ -74,18 +102,10 @@ module.exports = (app) => {
         const issues = await reviewWithBedrock(diff, pr.title, pr.body);
 
         if (issues.length > 0) {
-          await approvalClient.pulls.createReview({
-            ...repo,
-            pull_number: pr.number,
-            commit_id: pr.head.sha,
-            event: "REQUEST_CHANGES",
-            body: `AI review found ${issues.length} issue(s).`,
-            comments: issues.map((i) => ({
-              path: i.path,
-              line: i.line,
-              body: `🤖 ${i.body}`,
-            })),
-          });
+          await submitReview(context, pr, "REQUEST_CHANGES",
+            `AI review found ${issues.length} issue(s).`,
+            issues.map((i) => ({ path: i.path, line: i.line, body: `🤖 ${i.body}` }))
+          );
           app.log.info(`Requested changes on PR #${pr.number} (${issues.length} issues)`);
           return;
         }
@@ -94,14 +114,11 @@ module.exports = (app) => {
       }
     }
 
-    await approvalClient.pulls.createReview({
-      ...repo,
-      pull_number: pr.number,
-      event: "APPROVE",
-      body: process.env.BEDROCK_ENABLED === "true"
+    await submitReview(context, pr, "APPROVE",
+      process.env.BEDROCK_ENABLED === "true"
         ? "All checks passed. AI review found no issues. Auto-approved."
-        : "All checks passed. Auto-approved by pr-auto-approver bot.",
-    });
+        : "All checks passed. Auto-approved by pr-auto-approver bot."
+    );
 
     app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
   });
