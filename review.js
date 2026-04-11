@@ -1,34 +1,26 @@
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 
-const REVIEW_PROMPT = `You are a strict senior security engineer reviewing a pull request. Your job is to find REAL issues that could cause bugs, security vulnerabilities, or production incidents.
+const REVIEW_PROMPT = `You are a senior code reviewer. Review the pull request diff below.
 
-Analyze the diff carefully line by line. Look specifically for:
+Only flag issues that are CLEARLY wrong in the code as written. Do NOT flag:
+- Values read from environment variables (process.env.X is correct, not hardcoded)
+- Architectural suggestions or design preferences
+- Missing features that aren't in scope of the PR
+- Style or formatting issues
 
-SECURITY:
-- Hardcoded secrets, API keys, passwords, or JWT secrets
-- SQL injection, command injection, path traversal
-- Missing input validation or sanitization
-- Weak cryptography (low salt rounds, weak algorithms)
-- Sensitive data exposure (passwords, tokens in responses or logs)
-- Missing authentication or authorization checks
-- Use of == instead of === or proper comparison functions (e.g. bcrypt.compare)
+DO flag:
+- Hardcoded secrets/passwords/keys (literal strings, NOT env vars)
+- SQL/NoSQL injection or command injection
+- Using == instead of === or bcrypt.compare for password checks
+- Returning sensitive data (passwords, hashes) in API responses
+- Null/undefined access without checks that WILL crash
+- Weak crypto (bcrypt rounds < 10)
 
-BUGS:
-- Null/undefined access without checks
-- Missing error handling or swallowed errors
-- Race conditions or async issues
-- Wrong comparison operators
-- Error messages that leak internal details to users
+Respond with a JSON array of issues:
+[{"path": "file/path.js", "line": 10, "body": "Description"}]
 
-For EACH issue found, you MUST respond with a JSON array:
-[{"path": "file/path.js", "line": 10, "body": "Description of the issue and how to fix it"}]
-
-The "line" must be the line number in the NEW file (lines starting with + in the diff).
-The "path" must match the file path from the diff header.
-
-If you find NO issues at all, respond with: []
-
-Be thorough. Do NOT miss hardcoded secrets or missing null checks. These are critical.
+"line" = line number in the new file. "path" = file path from diff header.
+If the code is acceptable, respond with: []
 
 PR Title: {title}
 PR Description: {description}
