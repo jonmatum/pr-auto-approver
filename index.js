@@ -2,19 +2,12 @@ const { reviewWithBedrock } = require("./review");
 
 async function submitReview(context, pr, event, body, comments) {
   const repo = context.repo();
-  const params = {
-    owner: repo.owner,
-    repo: repo.repo,
-    pull_number: pr.number,
-    commit_id: pr.head.sha,
-    event,
-    body,
-  };
-  if (comments) params.comments = comments;
 
   if (process.env.APPROVAL_TOKEN) {
     const https = require("https");
-    const data = JSON.stringify(params);
+    const payload = { event, body };
+    if (comments) payload.comments = comments;
+    const data = JSON.stringify(payload);
     const options = {
       hostname: "api.github.com",
       path: `/repos/${repo.owner}/${repo.repo}/pulls/${pr.number}/reviews`,
@@ -22,25 +15,35 @@ async function submitReview(context, pr, event, body, comments) {
       headers: {
         Authorization: `token ${process.env.APPROVAL_TOKEN}`,
         "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(data),
         "User-Agent": "pr-auto-approver",
         Accept: "application/vnd.github+json",
       },
     };
-    await new Promise((resolve, reject) => {
+    const res = await new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
         let body = "";
         res.on("data", (d) => (body += d));
-        res.on("end", () => resolve(body));
+        res.on("end", () => resolve({ status: res.statusCode, body }));
       });
       req.on("error", reject);
       req.write(data);
       req.end();
     });
+    if (res.status >= 400) {
+      console.error(`PAT review failed (${res.status}): ${res.body}`);
+    }
   } else {
-    await context.octokit.pulls.createReview(params);
+    await context.octokit.pulls.createReview({
+      ...repo,
+      pull_number: pr.number,
+      commit_id: pr.head.sha,
+      event,
+      body,
+      ...(comments ? { comments } : {}),
+    });
   }
 }
-
 module.exports = (app) => {
   app.on(["pull_request.opened", "pull_request.synchronize", "check_suite.completed"], async (context) => {
     const pr =
