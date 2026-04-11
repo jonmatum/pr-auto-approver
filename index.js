@@ -91,7 +91,21 @@ module.exports = (app) => {
         : "All checks passed. Auto-approved by pr-auto-approver bot.",
     });
 
-    app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
+    // Auto-merge if enabled
+    if (process.env.AUTO_MERGE === "true") {
+      try {
+        await context.octokit.pulls.merge({
+          ...context.repo(),
+          pull_number: pr.number,
+          merge_method: "squash",
+        });
+        app.log.info(`Merged PR #${pr.number} by ${pr.user.login}`);
+      } catch (err) {
+        app.log.info(`Could not auto-merge PR #${pr.number}: ${err.message}`);
+      }
+    } else {
+      app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
+    }
   });
 };
 
