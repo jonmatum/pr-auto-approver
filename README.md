@@ -23,7 +23,7 @@ For PAT mode: create a classic PAT (`repo` scope) from a second GitHub account, 
 
 ```bash
 npm ci
-zip -r lambda.zip index.js lambda.js review.js secrets.js node_modules package.json
+npm run zip    # TypeScript → esbuild → lambda.zip (~1MB)
 ```
 
 ## Deploy

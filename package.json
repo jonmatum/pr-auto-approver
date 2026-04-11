@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "probot run ./index.js",
-    "test": "jest --coverage"
+    "test": "jest --coverage",
+    "build": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --outfile=dist/lambda.js --external:@aws-sdk/*",
+    "zip": "npm run build && cd dist && zip -r ../lambda.zip lambda.js"
   },
   "keywords": [],
   "author": "",
@@ -17,8 +19,13 @@
     "probot": "^14.3.2"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
     "aws-sdk-client-mock": "^4.1.0",
+    "esbuild": "^0.28.0",
     "jest": "^30.3.0",
-    "nock": "^14.0.12"
+    "nock": "^14.0.12",
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.2"
   }
 }

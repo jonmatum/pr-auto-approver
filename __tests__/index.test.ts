@@ -37,7 +37,7 @@ function createMockContext(action = "opened", author = "testuser") {
 
 function loadApp() {
   delete require.cache[require.resolve("../index")];
-  const appFn = require("../index");
+  const appFn = require("../src/index");
   const handlers = {};
   const app = {
     on: (events, handler) => {

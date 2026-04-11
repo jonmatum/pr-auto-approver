@@ -1,15 +1,16 @@
 const { createLambdaFunction, createProbot } = require("@probot/adapter-aws-lambda-serverless");
+import { getSecret } from "./secrets";
+import { checkTokenHealth } from "./token-health";
+
 const appFn = require("./index");
-const { getSecret } = require("./secrets");
-const { checkTokenHealth } = require("./token-health");
 
-let handler;
+let handler: any;
 
-module.exports.handler = async (event, context) => {
+exports.handler = async (event: any, context: any) => {
   if (!handler) {
     const [privateKey, webhookSecret] = await Promise.all([
-      getSecret(process.env.PRIVATE_KEY_SECRET_ARN),
-      getSecret(process.env.WEBHOOK_SECRET_SECRET_ARN),
+      getSecret(process.env.PRIVATE_KEY_SECRET_ARN!),
+      getSecret(process.env.WEBHOOK_SECRET_SECRET_ARN!),
     ]);
     process.env.PRIVATE_KEY = privateKey;
     process.env.WEBHOOK_SECRET = webhookSecret;

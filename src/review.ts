@@ -1,4 +1,10 @@
-const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+
+export interface ReviewIssue {
+  path: string;
+  line: number;
+  body: string;
+}
 
 const REVIEW_PROMPT = `You are a senior code reviewer. Review the pull request diff below.
 
@@ -28,8 +34,12 @@ PR Description: {description}
 Diff:
 {diff}`;
 
-async function reviewWithBedrock(diff, title, description) {
-  const client = new BedrockRuntimeClient();
+export async function reviewWithBedrock(
+  diff: string,
+  title: string | null,
+  description: string | null
+): Promise<ReviewIssue[]> {
+  const client = new BedrockRuntimeClient({});
   const modelId = process.env.BEDROCK_MODEL_ID || "us.anthropic.claude-3-5-haiku-20241022-v1:0";
 
   const prompt = REVIEW_PROMPT
@@ -49,15 +59,13 @@ async function reviewWithBedrock(diff, title, description) {
   }));
 
   const body = JSON.parse(new TextDecoder().decode(res.body));
-  const text = body.content[0].text;
+  const text: string = body.content[0].text;
 
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return [];
   try {
-    return JSON.parse(match[0]);
+    return JSON.parse(match[0]) as ReviewIssue[];
   } catch {
     return [];
   }
 }
-
-module.exports = { reviewWithBedrock };

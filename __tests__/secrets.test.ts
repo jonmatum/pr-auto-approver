@@ -12,7 +12,7 @@ beforeEach(() => {
 test("fetches secret from Secrets Manager", async () => {
   smMock.on(GetSecretValueCommand).resolves({ SecretString: "my-secret" });
 
-  const { getSecret } = require("../secrets");
+  const { getSecret } = require("../src/secrets");
   const result = await getSecret("arn:aws:secretsmanager:us-east-1:123:secret:test");
 
   expect(result).toBe("my-secret");
@@ -22,7 +22,7 @@ test("fetches secret from Secrets Manager", async () => {
 test("caches secrets after first fetch", async () => {
   smMock.on(GetSecretValueCommand).resolves({ SecretString: "cached-value" });
 
-  const { getSecret } = require("../secrets");
+  const { getSecret } = require("../src/secrets");
   const arn = "arn:aws:secretsmanager:us-east-1:123:secret:cache-test";
   await getSecret(arn);
 
@@ -38,7 +38,7 @@ test("caches different secrets independently", async () => {
     .resolvesOnce({ SecretString: "secret-a" })
     .resolvesOnce({ SecretString: "secret-b" });
 
-  const { getSecret } = require("../secrets");
+  const { getSecret } = require("../src/secrets");
   const a = await getSecret("arn:a");
   const b = await getSecret("arn:b");
 

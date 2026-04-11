@@ -1,5 +1,5 @@
 const nock = require("nock");
-const { checkTokenHealth } = require("../token-health");
+const { checkTokenHealth } = require("../src/token-health");
 
 beforeEach(() => {
   nock.cleanAll();

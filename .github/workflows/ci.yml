@@ -23,4 +23,4 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: zip -r lambda.zip index.js lambda.js review.js secrets.js node_modules package.json
+      - run: npm run zip

@@ -1,8 +1,8 @@
-const https = require("https");
+import https from "https";
 
 const WARN_DAYS = parseInt(process.env.TOKEN_EXPIRY_WARN_DAYS || "14", 10);
 
-function checkTokenHealth(token) {
+export function checkTokenHealth(token: string): void {
   const options = {
     hostname: "api.github.com",
     path: "/user",
@@ -14,14 +14,14 @@ function checkTokenHealth(token) {
 
   https.get(options, (res) => {
     if (res.statusCode === 401) {
-      console.error("[TOKEN-HEALTH] CRITICAL: Approval token is invalid or expired. PR approvals will fail.");
+      console.error("[TOKEN-HEALTH] CRITICAL: Approval token is invalid or expired.");
       return;
     }
 
-    const expiry = res.headers["github-authentication-token-expiration"];
+    const expiry = res.headers["github-authentication-token-expiration"] as string | undefined;
     if (expiry) {
       const expiresAt = new Date(expiry);
-      const daysLeft = Math.floor((expiresAt - Date.now()) / 86400000);
+      const daysLeft = Math.floor((expiresAt.getTime() - Date.now()) / 86400000);
 
       if (daysLeft <= 0) {
         console.error("[TOKEN-HEALTH] CRITICAL: Approval token has expired.");
@@ -33,5 +33,3 @@ function checkTokenHealth(token) {
     console.error(`[TOKEN-HEALTH] Failed to check token: ${err.message}`);
   });
 }
-
-module.exports = { checkTokenHealth };
