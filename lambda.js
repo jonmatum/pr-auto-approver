@@ -1,6 +1,7 @@
 const { createLambdaFunction, createProbot } = require("@probot/adapter-aws-lambda-serverless");
 const appFn = require("./index");
 const { getSecret } = require("./secrets");
+const { checkTokenHealth } = require("./token-health");
 
 let handler;
 
@@ -15,6 +16,7 @@ module.exports.handler = async (event, context) => {
 
     if (process.env.APPROVAL_TOKEN_SECRET_ARN) {
       process.env.APPROVAL_TOKEN = await getSecret(process.env.APPROVAL_TOKEN_SECRET_ARN);
+      checkTokenHealth(process.env.APPROVAL_TOKEN);
     }
 
     handler = createLambdaFunction(appFn, { probot: createProbot() });
