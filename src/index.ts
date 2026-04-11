@@ -82,6 +82,11 @@ module.exports = (app: any) => {
       const pr = context.payload.pull_request || (await getPRFromCheckSuite(context));
       if (!pr) return;
 
+      // Dismiss previous bot reviews on new pushes
+      if (context.payload.action === "synchronize") {
+        await dismissPreviousReviews(context, pr);
+      }
+
       const allowedUsers = (process.env.ALLOWED_AUTHORS || "")
         .split(",")
         .map((u: string) => u.trim())
@@ -154,3 +159,46 @@ module.exports = (app: any) => {
     }
   );
 };
+
+async function dismissPreviousReviews(context: any, pr: any): Promise<void> {
+  const reviews = await context.octokit.pulls.listReviews({
+    ...context.repo(),
+    pull_number: pr.number,
+  });
+
+  for (const review of reviews.data) {
+    if (review.state === "CHANGES_REQUESTED") {
+      try {
+        await context.octokit.pulls.dismissReview({
+          ...context.repo(),
+          pull_number: pr.number,
+          review_id: review.id,
+          message: "Dismissed: new commits pushed, re-reviewing.",
+        });
+      } catch {
+        // May fail if review was submitted via PAT — dismiss via PAT too
+        if (process.env.APPROVAL_TOKEN) {
+          const https = await import("https");
+          const repo = context.repo();
+          const data = JSON.stringify({ message: "Dismissed: new commits pushed, re-reviewing." });
+          await new Promise<void>((resolve) => {
+            const req = https.request({
+              hostname: "api.github.com",
+              path: `/repos/${repo.owner}/${repo.repo}/pulls/${pr.number}/reviews/${review.id}/dismissals`,
+              method: "PUT",
+              headers: {
+                Authorization: `token ${process.env.APPROVAL_TOKEN}`,
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(data),
+                "User-Agent": "pr-auto-approver",
+                Accept: "application/vnd.github+json",
+              },
+            }, () => resolve());
+            req.write(data);
+            req.end();
+          });
+        }
+      }
+    }
+  }
+}

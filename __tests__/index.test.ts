@@ -29,6 +29,7 @@ function createMockContext(action = "opened", author = "testuser") {
       pulls: {
         listReviews: jest.fn().mockResolvedValue({ data: [] }),
         createReview: jest.fn().mockResolvedValue({}),
+        dismissReview: jest.fn().mockResolvedValue({}),
         get: jest.fn().mockResolvedValue({ data: "diff content" }),
       },
     },
@@ -36,7 +37,7 @@ function createMockContext(action = "opened", author = "testuser") {
 }
 
 function loadApp() {
-  delete require.cache[require.resolve("../index")];
+  delete require.cache[require.resolve("../src/index")];
   const appFn = require("../src/index");
   const handlers = {};
   const app = {

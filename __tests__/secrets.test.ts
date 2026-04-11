@@ -6,7 +6,7 @@ const smMock = mockClient(SecretsManagerClient);
 beforeEach(() => {
   smMock.reset();
   // Clear the cache between tests
-  delete require.cache[require.resolve("../secrets")];
+  delete require.cache[require.resolve("../src/secrets")];
 });
 
 test("fetches secret from Secrets Manager", async () => {
