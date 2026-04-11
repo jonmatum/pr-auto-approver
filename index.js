@@ -35,15 +35,17 @@ module.exports = (app) => {
       return;
     }
 
-    // Avoid duplicate reviews
-    const reviews = await context.octokit.pulls.listReviews({
-      ...context.repo(),
-      pull_number: pr.number,
-    });
-    const alreadyReviewed = reviews.data.some(
-      (r) => (r.state === "APPROVED" || r.state === "CHANGES_REQUESTED") && r.user.type === "Bot"
-    );
-    if (alreadyReviewed) return;
+    // Avoid duplicate reviews (skip check on new pushes)
+    if (context.payload.action !== "synchronize") {
+      const reviews = await context.octokit.pulls.listReviews({
+        ...context.repo(),
+        pull_number: pr.number,
+      });
+      const alreadyReviewed = reviews.data.some(
+        (r) => (r.state === "APPROVED" || r.state === "CHANGES_REQUESTED") && r.user.type === "Bot"
+      );
+      if (alreadyReviewed) return;
+    }
 
     // Bedrock AI review (opt-in)
     if (process.env.BEDROCK_ENABLED === "true") {
