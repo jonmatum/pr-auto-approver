@@ -1,19 +1,34 @@
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 
-const REVIEW_PROMPT = `You are a senior code reviewer. Review the following pull request diff.
+const REVIEW_PROMPT = `You are a strict senior security engineer reviewing a pull request. Your job is to find REAL issues that could cause bugs, security vulnerabilities, or production incidents.
 
-For each issue found, respond with a JSON array of objects:
-[{"path": "file/path.js", "line": 10, "body": "Description of the issue"}]
+Analyze the diff carefully line by line. Look specifically for:
 
-If no issues are found, respond with an empty array: []
+SECURITY:
+- Hardcoded secrets, API keys, passwords, or JWT secrets
+- SQL injection, command injection, path traversal
+- Missing input validation or sanitization
+- Weak cryptography (low salt rounds, weak algorithms)
+- Sensitive data exposure (passwords, tokens in responses or logs)
+- Missing authentication or authorization checks
+- Use of == instead of === or proper comparison functions (e.g. bcrypt.compare)
 
-Focus on:
-- Bugs and logic errors
-- Security vulnerabilities
-- Performance issues
-- Missing error handling
+BUGS:
+- Null/undefined access without checks
+- Missing error handling or swallowed errors
+- Race conditions or async issues
+- Wrong comparison operators
+- Error messages that leak internal details to users
 
-Do NOT comment on style, formatting, or minor nitpicks.
+For EACH issue found, you MUST respond with a JSON array:
+[{"path": "file/path.js", "line": 10, "body": "Description of the issue and how to fix it"}]
+
+The "line" must be the line number in the NEW file (lines starting with + in the diff).
+The "path" must match the file path from the diff header.
+
+If you find NO issues at all, respond with: []
+
+Be thorough. Do NOT miss hardcoded secrets or missing null checks. These are critical.
 
 PR Title: {title}
 PR Description: {description}
@@ -23,7 +38,7 @@ Diff:
 
 async function reviewWithBedrock(diff, title, description) {
   const client = new BedrockRuntimeClient();
-  const modelId = process.env.BEDROCK_MODEL_ID || "anthropic.claude-3-haiku-20240307-v1:0";
+  const modelId = process.env.BEDROCK_MODEL_ID || "us.anthropic.claude-3-5-haiku-20241022-v1:0";
 
   const prompt = REVIEW_PROMPT
     .replace("{title}", title || "")
