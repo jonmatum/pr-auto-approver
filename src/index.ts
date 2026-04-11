@@ -172,6 +172,24 @@ module.exports = (app: any) => {
       app.log.info(`Approved PR #${pr.number} by ${pr.user.login}`);
     }
   );
+
+  if (process.env.AUTO_COLLABORATOR) {
+    app.on("repository.created", async (context: any) => {
+      const repo = context.payload.repository;
+      const username = process.env.AUTO_COLLABORATOR!;
+      try {
+        await context.octokit.repos.addCollaborator({
+          owner: repo.owner.login,
+          repo: repo.name,
+          username,
+          permission: "write",
+        });
+        app.log.info(`Invited ${username} to ${repo.full_name}`);
+      } catch (err: any) {
+        app.log.error(`Failed to invite ${username} to ${repo.full_name}: ${err.message}`);
+      }
+    });
+  }
 };
 
 async function dismissPreviousReviews(context: any, pr: any): Promise<void> {
