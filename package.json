@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "probot run ./index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +15,10 @@
     "@aws-sdk/client-secrets-manager": "^3.1029.0",
     "@probot/adapter-aws-lambda-serverless": "^4.0.3",
     "probot": "^14.3.2"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "jest": "^30.3.0",
+    "nock": "^14.0.12"
   }
 }
